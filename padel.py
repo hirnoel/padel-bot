@@ -3,19 +3,17 @@ import streamlit.components.v1 as components
 import requests
 from datetime import datetime, timedelta
 
-# --- PAGE CONFIG ---
+# --- PAGE SETUP ---
 st.set_page_config(layout="wide", page_title="WestPadel Bot")
 
 # --- ⬇️ SECRETS ⬇️ ---
-try:
-    MY_EMAIL = st.secrets["MY_EMAIL"]
-    MY_PASSWORD = st.secrets["MY_PASSWORD"]
-    MY_USER_ID = st.secrets["MY_USER_ID"]
-    MY_NAME = st.secrets["MY_NAME"]
-    MY_PIN = st.secrets["MY_PIN"]
-except:
-    st.error("❌ Secrets missing! Check your Streamlit Cloud settings.")
-    st.stop()
+
+MY_EMAIL = st.secrets["MY_EMAIL"]
+MY_PASSWORD = st.secrets["MY_PASSWORD"]
+MY_USER_ID = st.secrets["MY_USER_ID"]
+MY_NAME = st.secrets["MY_NAME"]
+MY_PIN = st.secrets["MY_PIN"]
+
 
 # --- CONFIG ---
 COURT_IDS = [1, 2, 3, 4]
@@ -25,10 +23,16 @@ URL_BASE = "https://foglalas.westpadel.hu/Customer"
 # --- CSS ---
 st.markdown("""
 <style>
-    /* Global Styles */
-    .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+    /* Fix for the "Cut Off" issue - more space at the top */
+    .block-container { 
+        padding-top: 4rem !important; 
+        padding-bottom: 2rem; 
+    }
     
-    /* Calendar Wrapper inside iframe */
+    /* Center the date nicely */
+    h3 { margin-top: -10px; }
+
+    /* Calendar Wrapper */
     iframe { width: 100%; }
 </style>
 """, unsafe_allow_html=True)
@@ -111,20 +115,20 @@ def get_day_schedule(bookings, current_date, court_id):
 def render_html_calendar(all_courts_data, court_names):
     OPENING_HOUR, CLOSING_HOUR = 8, 23
     PIXELS_PER_HOUR = 48
-    HEADER_HEIGHT = 35 # Space for the court name
+    HEADER_HEIGHT = 40 # Increased slightly for mobile tap target
     
     css = """<style>
         .calendar-wrapper { display: flex; flex-direction: row; height: 750px; font-family: 'Segoe UI', sans-serif; background-color: white; border: 1px solid #e0e0e0; overflow: auto; -webkit-overflow-scrolling: touch; }
-        .time-col { width: 50px; border-right: 1px solid #eee; background-color: #fafafa; position: relative; flex-shrink: 0; sticky: left; }
+        .time-col { width: 50px; border-right: 1px solid #eee; background-color: #fafafa; position: sticky; left: 0; z-index: 30; }
         .time-label { position: absolute; width: 100%; text-align: right; padding-right: 6px; font-size: 11px; color: #999; transform: translateY(-50%); }
-        .court-col { min-width: 100px; flex: 1; position: relative; border-right: 1px solid #f0f0f0; }
+        .court-col { min-width: 110px; flex: 1; position: relative; border-right: 1px solid #f0f0f0; }
         .grid-line { position: absolute; width: 100%; border-top: 1px solid #f5f5f5; z-index: 0; }
         .grid-line-major { border-color: #eee; }
         .event-card { position: absolute; width: 94%; left: 3%; border-radius: 4px; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-sizing: border-box; z-index: 10; white-space: nowrap; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.1s; }
         .event-card:hover { z-index: 20; transform: scale(1.02); }
         .free { background-color: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; cursor: pointer; }
-        .header { height: 35px; text-align: center; font-weight: bold; font-size: 14px; background: #2776F5; color: white; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #ddd; }
-        .time-header { height: 35px; background: #fafafa; border-bottom: 1px solid #ddd; }
+        .header { height: 40px; text-align: center; font-weight: bold; font-size: 13px; background: #2776F5; color: white; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 25; }
+        .time-header { height: 40px; background: #fafafa; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 35; }
     </style>"""
     
     html = f'{css}<div class="calendar-wrapper"><div class="time-col"><div class="time-header"></div>'
@@ -136,7 +140,7 @@ def render_html_calendar(all_courts_data, court_names):
 
     for i, court_data in enumerate(all_courts_data):
         html += '<div class="court-col">'
-        # ADDED: Header inside the column
+        # Sticky Header inside column
         html += f'<div class="header">{court_names[i]}</div>'
         
         for h in range(CLOSING_HOUR - OPENING_HOUR + 1):
@@ -241,9 +245,8 @@ if col1.button("⬅️", on_click=adjust_date, args=(-1,)): pass
 if col3.button("➡️", on_click=adjust_date, args=(1,)): pass
 col2.markdown(f"<h3 style='text-align:center; margin:0;'>{st.session_state.current_date.strftime('%Y. %B %d. (%A)')}</h3>", unsafe_allow_html=True)
 
-# Render Calendar
+# Render
 bookings = fetch_data_session(st.session_state.current_date)
 all_data = [get_day_schedule(bookings, st.session_state.current_date, cid) for cid in COURT_IDS]
-# Passing COURT_NAMES here is key for alignment
 html = render_html_calendar(all_data, COURT_NAMES)
 components.html(html, height=780, scrolling=False)
