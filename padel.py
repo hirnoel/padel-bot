@@ -34,9 +34,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE ---
-if 'session' not in st.session_state:
+# --- SESSION STATE & SELF-HEALING ---
+if 'run_id' not in st.session_state:
+    st.session_state.run_id = str(uuid.uuid4())
+    # FORCE RESET: If we just started, nuke any old broken session data
     st.session_state.session = requests.Session()
+    st.session_state.is_logged_in = False
+    st.session_state.user_full_name = ""
+    st.session_state.current_date = datetime.now().date()
+    st.session_state.sidebar_date = datetime.now().date()
+    
+    # Set headers immediately
     st.session_state.session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "X-Requested-With": "XMLHttpRequest",
