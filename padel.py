@@ -4,18 +4,20 @@ import requests
 from datetime import datetime, timedelta
 import uuid
 
-# --- CONFIGURATION ---
-COURT_IDS = [1, 2, 3, 4]
-COURT_NAMES = ["Páros 1", "Páros 2", "Páros 3", "Egyéni 4"]
-URL_BASE = "https://foglalas.westpadel.hu/Customer"
+# --- PAGE SETUP ---
+st.set_page_config(layout="wide", page_title="WestPadel Bot")
 
 MY_EMAIL = st.secrets["MY_EMAIL"]
 MY_PASSWORD = st.secrets["MY_PASSWORD"]
 MY_USER_ID = st.secrets["MY_USER_ID"]
 MY_NAME = st.secrets["MY_NAME"]
+MY_PIN = st.secrets["MY_PIN"]
 
-# --- PAGE SETUP ---
-st.set_page_config(layout="wide", page_title="WestPadel Bot")
+
+# --- CONFIGURATION ---
+COURT_IDS = [1, 2, 3, 4]
+COURT_NAMES = ["Páros 1", "Páros 2", "Páros 3", "Egyéni 4"]
+URL_BASE = "https://foglalas.westpadel.hu/Customer"
 
 # --- CSS ---
 st.markdown("""
@@ -32,7 +34,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE & AUTO-LOGIN ---
+# --- SESSION STATE ---
 if 'session' not in st.session_state:
     st.session_state.session = requests.Session()
     st.session_state.session.headers.update({
@@ -42,22 +44,18 @@ if 'session' not in st.session_state:
         "Referer": "https://foglalas.westpadel.hu/Customer/Reservation",
     })
 
-# --- AUTO-LOGIN LOGIC ---
+# --- AUTO-LOGIN ---
 if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
-    
-    # Try to log in immediately
     try:
         login_payload = { "ddlLangCode": "HU", "LoginName": MY_EMAIL, "Password": MY_PASSWORD }
         st.session_state.session.post(f"{URL_BASE}/User/ValidateLogin", params={"Length": "4"}, data=login_payload)
         
-        # Verify
         r_check = st.session_state.session.get(f"{URL_BASE}/Reservation")
         if MY_NAME in r_check.text:
             st.session_state.is_logged_in = True
             st.session_state.user_full_name = MY_NAME
-    except:
-        pass # If it fails, we just stay logged out
+    except: pass
 
 if 'current_date' not in st.session_state:
     st.session_state.current_date = datetime.now().date()
@@ -156,91 +154,98 @@ with st.sidebar:
         b_time = st.time_input("Start Time", value=datetime.strptime("18:00", "%H:%M"))
         b_duration = st.selectbox("Duration", ["60 min", "90 min", "120 min", "150 min"])
         
+        st.divider()
+        # --- 🔒 SECURITY: PIN CODE ---
+        user_pin = st.text_input("Enter PIN to Book", type="password", placeholder="****")
+        
         if st.button("Confirm Booking"):
-            duration_mins = int(b_duration.split()[0])
-            start_dt = datetime.combine(b_date, b_time)
-            end_dt = start_dt + timedelta(minutes=duration_mins)
-            court_id = COURT_IDS[COURT_NAMES.index(b_court)]
-            days_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            day_name = days_en[start_dt.weekday()]
-            
-            try:
-                # 1. PRICE
-                st.info("1/3 Checking Price...")
-                price_payload = {
-                    "BookingType": "1", "SportsFieldID": str(court_id), "Date": start_dt.strftime("%Y-%m-%d"),
-                    "FromTime": start_dt.strftime("%H:%M"), "ToTime": end_dt.strftime("%H:%M"),
-                    "IsTrainerRequired": "false", "TillDate": "2026-12-31", "DayOfWeek": day_name, 
-                    "IsRecurring": "false", "IsBlocking": "false", "ReservationID": "0", "RecurringReservationID": "", 
-                    "UserID": MY_USER_ID 
-                }
+            if user_pin != MY_PIN:
+                st.error("❌ INCORRECT PIN!")
+            else:
+                duration_mins = int(b_duration.split()[0])
+                start_dt = datetime.combine(b_date, b_time)
+                end_dt = start_dt + timedelta(minutes=duration_mins)
+                court_id = COURT_IDS[COURT_NAMES.index(b_court)]
+                days_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                day_name = days_en[start_dt.weekday()]
                 
-                price_r = st.session_state.session.post(f"{URL_BASE}/Reservation/GetReservationPrice", data=price_payload)
-                
-                if price_r.status_code == 200:
-                    price_data = price_r.json()
-                    if not price_data.get("SingleReservation"):
-                        st.error("Could not get price.")
-                        st.stop()
-                        
-                    gross_amount = str(price_data["SingleReservation"]["Price"])
-                    price_uuid = price_data["MainUserPriceDetail"]["PriceCalculationIdentifier"]
-                    st.write(f"💰 Price: {gross_amount} Ft")
+                try:
+                    # 1. PRICE
+                    st.info("1/3 Checking Price...")
+                    price_payload = {
+                        "BookingType": "1", "SportsFieldID": str(court_id), "Date": start_dt.strftime("%Y-%m-%d"),
+                        "FromTime": start_dt.strftime("%H:%M"), "ToTime": end_dt.strftime("%H:%M"),
+                        "IsTrainerRequired": "false", "TillDate": "2026-12-31", "DayOfWeek": day_name, 
+                        "IsRecurring": "false", "IsBlocking": "false", "ReservationID": "0", "RecurringReservationID": "", 
+                        "UserID": MY_USER_ID 
+                    }
+                    
+                    price_r = st.session_state.session.post(f"{URL_BASE}/Reservation/GetReservationPrice", data=price_payload)
+                    
+                    if price_r.status_code == 200:
+                        price_data = price_r.json()
+                        if not price_data.get("SingleReservation"):
+                            st.error("Could not get price.")
+                            st.stop()
+                            
+                        gross_amount = str(price_data["SingleReservation"]["Price"])
+                        price_uuid = price_data["MainUserPriceDetail"]["PriceCalculationIdentifier"]
+                        st.write(f"💰 Price: {gross_amount} Ft")
 
-                    # 2. VALIDATE
-                    proceed_payload = {
-                        "reservation[Reservation_ID]": "0", "reservation[IsRecurring]": "false", "reservation[RecurringReservation_ID]": "",
-                        "reservation[SportsField_ID]": str(court_id), "reservation[SportsFieldType_ID]": "1", "reservation[ReservationType_ID]": "1",
-                        "reservation[Date]": start_dt.strftime("%Y-%m-%d"), "reservation[DayOfWeek]": day_name, "reservation[EndDate]": "2026.12.31",
-                        "reservation[BeginningTime]": start_dt.strftime("%H:%M"), "reservation[EndTime]": end_dt.strftime("%H:%M"), "reservation[ServiceType_ID]": "1"
-                    }
-                    st.session_state.session.post(f"{URL_BASE}/Reservation/GetProceedToPaymentData", data=proceed_payload)
-                    
-                    # 3. BOOK
-                    st.info("3/3 Finalizing...")
-                    booking_payload = {
-                        "addReservation[ActualValue]": gross_amount,
-                        "addReservation[Reservation_ID]": "0",
-                        "addReservation[RecurringReservation_ID]": "",
-                        "addReservation[Date]": start_dt.strftime("%Y-%m-%d"),
-                        "addReservation[BeginningTime]": start_dt.strftime("%H:%M"),
-                        "addReservation[EndTime]": end_dt.strftime("%H:%M"),
-                        "addReservation[IsTrainerRequired]": "false",
-                        "addReservation[IsRecurring]": "false",
-                        "addReservation[ReservationCount]": "1",
-                        "addReservation[Dayofweek]": day_name, 
-                        "addReservation[EndDate]": "2026.12.31", 
-                        "addReservation[SportsField_ID]": str(court_id),
-                        "addReservation[SpecialRequest]": "",
-                        "addReservation[GrossAmount]": gross_amount,
-                        "addReservation[UnitAmount]": gross_amount,
-                        "addReservation[PaidByCredit]": "0",
-                        "addReservation[ReserveAndPayLater]": "true",
-                        "addReservation[SportsFieldType]": "1",
-                        "addReservation[ExternalReference]": "",
-                        "addReservation[BookingType]": "1",
-                        "addReservation[SplitPaymentUsers][0][UserId]": MY_USER_ID,
-                        "addReservation[SplitPaymentUsers][0][PriceCalculationIdentifier]": price_uuid,
-                        "addReservation[SplitPaymentUsers][0][SplitPayable]": gross_amount,
-                        "addReservation[PriceCalculationIdentifier]": price_uuid,
-                        "progressHubConnectionID": "", 
-                    }
-                    
-                    book_r = st.session_state.session.post(f"{URL_BASE}/Reservation/AddNewReservation", data=booking_payload)
-                    
-                    if book_r.status_code == 200 and "true" in book_r.text.lower():
-                        st.toast("SUCCESS! 🎉", icon="✅")
-                        st.balloons()
-                        if b_date == st.session_state.current_date:
-                            st.rerun()
+                        # 2. VALIDATE
+                        proceed_payload = {
+                            "reservation[Reservation_ID]": "0", "reservation[IsRecurring]": "false", "reservation[RecurringReservation_ID]": "",
+                            "reservation[SportsField_ID]": str(court_id), "reservation[SportsFieldType_ID]": "1", "reservation[ReservationType_ID]": "1",
+                            "reservation[Date]": start_dt.strftime("%Y-%m-%d"), "reservation[DayOfWeek]": day_name, "reservation[EndDate]": "2026.12.31",
+                            "reservation[BeginningTime]": start_dt.strftime("%H:%M"), "reservation[EndTime]": end_dt.strftime("%H:%M"), "reservation[ServiceType_ID]": "1"
+                        }
+                        st.session_state.session.post(f"{URL_BASE}/Reservation/GetProceedToPaymentData", data=proceed_payload)
+                        
+                        # 3. BOOK
+                        st.info("3/3 Finalizing...")
+                        booking_payload = {
+                            "addReservation[ActualValue]": gross_amount,
+                            "addReservation[Reservation_ID]": "0",
+                            "addReservation[RecurringReservation_ID]": "",
+                            "addReservation[Date]": start_dt.strftime("%Y-%m-%d"),
+                            "addReservation[BeginningTime]": start_dt.strftime("%H:%M"),
+                            "addReservation[EndTime]": end_dt.strftime("%H:%M"),
+                            "addReservation[IsTrainerRequired]": "false",
+                            "addReservation[IsRecurring]": "false",
+                            "addReservation[ReservationCount]": "1",
+                            "addReservation[Dayofweek]": day_name, 
+                            "addReservation[EndDate]": "2026.12.31", 
+                            "addReservation[SportsField_ID]": str(court_id),
+                            "addReservation[SpecialRequest]": "",
+                            "addReservation[GrossAmount]": gross_amount,
+                            "addReservation[UnitAmount]": gross_amount,
+                            "addReservation[PaidByCredit]": "0",
+                            "addReservation[ReserveAndPayLater]": "true",
+                            "addReservation[SportsFieldType]": "1",
+                            "addReservation[ExternalReference]": "",
+                            "addReservation[BookingType]": "1",
+                            "addReservation[SplitPaymentUsers][0][UserId]": MY_USER_ID,
+                            "addReservation[SplitPaymentUsers][0][PriceCalculationIdentifier]": price_uuid,
+                            "addReservation[SplitPaymentUsers][0][SplitPayable]": gross_amount,
+                            "addReservation[PriceCalculationIdentifier]": price_uuid,
+                            "progressHubConnectionID": "", 
+                        }
+                        
+                        book_r = st.session_state.session.post(f"{URL_BASE}/Reservation/AddNewReservation", data=booking_payload)
+                        
+                        if book_r.status_code == 200 and "true" in book_r.text.lower():
+                            st.toast("SUCCESS! 🎉", icon="✅")
+                            st.balloons()
+                            if b_date == st.session_state.current_date:
+                                st.rerun()
+                        else:
+                            st.error("Booking Rejected")
+                            st.text(book_r.text)
                     else:
-                        st.error("Booking Rejected")
-                        st.text(book_r.text)
-                else:
-                    st.error(f"Price Check Failed: {price_r.status_code}")
-                    
-            except Exception as e:
-                st.error(f"Error: {e}")
+                        st.error(f"Price Check Failed: {price_r.status_code}")
+                        
+                except Exception as e:
+                    st.error(f"Error: {e}")
     else:
         st.error("⚠️ Auto-Login Failed. Check Credentials.")
 
