@@ -170,7 +170,7 @@ with st.sidebar:
         b_date = st.date_input("Date", key="sidebar_date", on_change=update_date_from_sidebar)
         b_court = st.selectbox("Select Court", COURT_NAMES)
         b_time = st.time_input("Start Time", value=datetime.strptime("18:00", "%H:%M"))
-        b_duration = st.selectbox("Duration", ["60 min", "90 min", "120 min", "150 min"])
+        b_duration = st.selectbox("Duration", ["30 min", "60 min", "90 min", "120 min", "150 min"])
         
         st.divider()
         user_pin = st.text_input("Enter PIN", type="password", placeholder="****")
